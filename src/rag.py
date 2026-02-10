@@ -1,8 +1,19 @@
-import os
+"""
+RAG SERVICE (Retrieval Augmented Generation)
+
+Zweck:
+Diese Datei enthält die Logik für das Beantworten von Fragen (Inference).
+Sie wird später von der API (app.py) importiert und genutzt.
+
+Ablauf:
+1. Empfängt eine Frage (Query).
+2. Sucht in der ChromaDB nach relevanten Kontext-Schnipseln (Retrieval).
+3. Baut einen Prompt für das LLM (Ollama).
+4. Generiert die Antwort.
+"""
+
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -22,34 +33,25 @@ Beantworte die Frage basierend auf dem obigen Kontext: {question}
 """
 
 def get_embedding_function():
+    """Erstellt den Vektor-Übersetzer (Singleton-Pattern)."""
     return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-
-def add_to_chroma(chunks):
-    """Speichert Chunks in der DB."""
-    db = Chroma(
-        persist_directory=DB_PATH,
-        embedding_function=get_embedding_function()
-    )
-    db.add_documents(chunks)
-    print(f"✅ {len(chunks)} Chunks gespeichert.")
 
 def query_rag(query_text):
     """
-    1. Suche in der DB nach relevanten Chunks.
-    2. Sende Chunks + Frage an Ollama.
-    3. Gib Antwort zurück.
+    Hauptfunktion für die Anfrage.
+    Wird später von der API (app.py) aufgerufen.
     """
-    # 1. Datenbank vorbereiten
+    # 1. Datenbank laden
     embedding_function = get_embedding_function()
     db = Chroma(persist_directory=DB_PATH, embedding_function=embedding_function)
 
-    # 2. Suchen (Top 5 Treffer)
+    # 2. Suchen
     print(f"🔍 Suche nach: '{query_text}'")
     results = db.similarity_search_with_score(query_text, k=5)
 
     if not results:
         print("❌ Nichts Relevantes gefunden.")
-        return
+        return "Ich habe dazu keine Informationen gefunden."
 
     # 3. Kontext zusammenbauen
     context_text = "\n\n---\n\n".join([doc.page_content for doc, _score in results])
@@ -63,46 +65,14 @@ def query_rag(query_text):
     model = ChatOllama(model=OLLAMA_MODEL)
     response_text = model.invoke(prompt)
 
-    # 6. Ergebnis ausgeben
-    print("\n" + "="*50)
-    print(f"ANTWORT:\n{response_text.content}")
-    print("="*50)
-
-    # Quellen anzeigen (für den CV wichtig!)
+    # 6. Ergebnis formatieren
     sources = [doc.metadata.get("source", None) for doc, _score in results]
-    print(f"\n📚 Quellen: {list(set(sources))}")
+    formatted_response = f"{response_text.content}\n\nQuellen: {list(set(sources))}"
 
-# --- HELPER FÜR INGESTION ---
-def load_documents():
-    documents = []
-    for file in os.listdir(DATA_PATH):
-        if file.endswith(".pdf"):
-            pdf_path = os.path.join(DATA_PATH, file)
-            loader = PyPDFLoader(pdf_path)
-            documents.extend(loader.load())
-    return documents
+    print("✅ Antwort generiert.")
+    return formatted_response
 
-def split_text(documents):
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len,
-        add_start_index=True,
-    )
-    return text_splitter.split_documents(documents)
-
-# --- HAUPTPROGRAMM ---
+# Nur zum schnellen Testen, falls man die Datei direkt ausführt
 if __name__ == "__main__":
-    # Kleines Menü zum Testen
-    print("1. Datenbank neu erstellen (Ingest)")
-    print("2. Frage stellen (Query)")
-    choice = input("Wähle (1 oder 2): ")
-
-    if choice == "1":
-        docs = load_documents()
-        if docs:
-            chunks = split_text(docs)
-            add_to_chroma(chunks)
-    elif choice == "2":
-        question = input("Deine Frage: ")
-        query_rag(question)
+    antwort = query_rag("Was ist ein Zertifikat?")
+    print(antwort)

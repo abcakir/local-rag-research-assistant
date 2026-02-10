@@ -23,8 +23,11 @@ DB_PATH = "./db"
 OLLAMA_MODEL = "llama3"
 
 PROMPT_TEMPLATE = """
-Beantworte die Frage basierend auf dem folgenden Kontext:
+Du bist ein Assistent für Frage-Antwort-Aufgaben. Nutze nur die folgenden Kontext-Informationen, um die Frage zu beantworten.
+Wenn du die Antwort nicht im Kontext findest, sage strikt: "Dazu gibt es keine Informationen in der PDF, die Sie mir gegeben haben."
+Erfinde keine Antworten und nutze kein externes Wissen.
 
+Kontext:
 {context}
 
 ---

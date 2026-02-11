@@ -1,3 +1,18 @@
+"""
+app.py - Der Backend-Server (API)
+
+Diese Datei ist das Herzstück der Anwendung. Sie stellt die REST-API bereit,
+über die das Frontend (Streamlit) mit der Logik kommuniziert.
+
+Aufgaben:
+1. Bereitstellung der Endpunkte (Upload, Chat, Delete, Health-Check).
+2. Entgegennahme von PDF-Dateien und Weiterleitung an die Ingestion-Pipeline.
+3. Verarbeitung von Suchanfragen (Queries) und Rückgabe der KI-Antworten.
+4. Orchestrierung zwischen Datenbank (ChromaDB) und LLM.
+
+Tech-Stack: FastAPI, Pydantic, Shutil
+"""
+
 import os
 import shutil
 from fastapi import FastAPI, HTTPException, UploadFile, File

@@ -1,3 +1,18 @@
+"""
+ingest.py - Die Datenverarbeitung (ETL-Pipeline)
+---------------------------------------------------
+Dieses Skript ist für das "Lernen" zuständig. Es liest rohe PDF-Dateien,
+zerteilt sie in verständliche Stücke und speichert sie in der Vektordatenbank.
+
+Aufgaben:
+1. Loading: Einlesen aller PDFs aus dem ./data Ordner.
+2. Splitting: Zerlegen der Texte in kleinere "Chunks" (Häppchen) für das LLM.
+3. Embedding: Umwandlung von Text in Vektoren (Zahlenreihen).
+4. Storing: Speichern der Vektoren in ChromaDB für die schnelle Suche.
+
+Wird aufgerufen: Beim Start der App oder nach jedem Datei-Upload.
+"""
+
 import os
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter

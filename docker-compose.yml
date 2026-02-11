@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # --- DAS BACKEND (API) ---
+  backend:
+    build: .
+    container_name: rag-backend
+    # Überschreibt den CMD im Dockerfile, um die API zu starten
+    command: uvicorn src.app:app --host 0.0.0.0 --port 8000
+    volumes:
+      - ./data:/app/data           # Deine PDFs bleiben auf dem PC gespeichert
+      - ./chroma_db:/app/chroma_db # Dein KI-Gedächtnis bleibt gespeichert
+    ports:
+      - "8000:8000"
+    environment:
+      # WICHTIG: Erlaubt dem Container, Ollama auf deinem Windows/Mac zu finden
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+
+  # --- DAS FRONTEND (UI) ---
+  frontend:
+    build: .
+    container_name: rag-frontend
+    # Überschreibt den CMD im Dockerfile, um Streamlit zu starten
+    command: streamlit run src/ui.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      # Das Frontend spricht das Backend über den Service-Namen "backend" an
+      - API_URL=http://backend:8000
+    depends_on:
+      - backend

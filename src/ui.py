@@ -1,8 +1,27 @@
+"""
+ui.py - Das Frontend (Benutzeroberfläche)
+
+Diese Datei erzeugt die grafische Oberfläche für den Endnutzer im Browser.
+Sie enthält keine Geschäftslogik, sondern ruft nur die API (app.py) auf.
+
+Aufgaben:
+1. Darstellung des Chat-Interfaces (Chatbot-Look).
+2. Verwaltung von Datei-Uploads und Löschvorgängen via Sidebar.
+3. Session-Management (Speichern des Chatverlaufs).
+4. Visualisierung von Ladezeiten (Spinner) und Fehlermeldungen.
+
+Tech-Stack: Streamlit, Requests
+"""
+import os
+import streamlit as st
+# ... (Rest deines Codes)
+
+import os
 import streamlit as st
 import requests
 import time
 
-API_URL = "http://127.0.0.1:8000"
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 # --- CONFIG & CSS ---
 st.set_page_config(page_title="Document Intelligence", page_icon="📄", layout="wide")

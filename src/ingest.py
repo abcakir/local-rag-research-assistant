@@ -1,18 +1,4 @@
-"""
-INGESTION PIPELINE (ETL - Extract, Transform, Load)
-
-Zweck:
-Diese Datei ist für die VORBEREITUNG der Daten zuständig.
-Sie muss nur ausgeführt werden, wenn neue PDFs in den 'data/'-Ordner gelegt wurden.
-
-Ablauf:
-1. Load: Liest PDFs aus dem Ordner.
-2. Split: Zerlegt Texte in kleine Häppchen (Chunks).
-3. Store: Berechnet Embeddings und speichert sie in ChromaDB.
-"""
-
 import os
-import shutil
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
@@ -27,9 +13,12 @@ def load_documents():
     for file in os.listdir(DATA_PATH):
         if file.endswith(".pdf"):
             pdf_path = os.path.join(DATA_PATH, file)
-            print(f"📄 Lade PDF: {file}...")
-            loader = PyPDFLoader(pdf_path)
-            documents.extend(loader.load())
+            # print(f"📄 Lade PDF: {file}...") # Optional: Weniger Spam im Terminal
+            try:
+                loader = PyPDFLoader(pdf_path)
+                documents.extend(loader.load())
+            except Exception as e:
+                print(f"⚠️ Fehler beim Laden von {file}: {e}")
     return documents
 
 def split_text(documents):
@@ -41,46 +30,47 @@ def split_text(documents):
         add_start_index=True,
     )
     chunks = text_splitter.split_documents(documents)
-    print(f"✂️  Dokumente in {len(chunks)} Chunks zerlegt.")
+    print(f"✂️  {len(documents)} Dokumente in {len(chunks)} Chunks zerlegt.")
     return chunks
-
-def save_to_chroma(chunks):
-    """Speichert die Chunks in der Vektor-Datenbank."""
-    # Alte Datenbank löschen (für sauberen Neustart)
-    if os.path.exists(DB_PATH):
-        shutil.rmtree(DB_PATH)
-
-    # Neue Datenbank erstellen
-    db = Chroma.from_documents(
-        documents=chunks,
-        embedding=get_embedding_function(),
-        persist_directory=DB_PATH
-    )
-    print(f"✅ Datenbank neu erstellt in {DB_PATH} mit {len(chunks)} Einträgen.")
 
 def ingest_docs():
     """
-    Führt die komplette Pipeline aus: Laden -> Splitten -> Speichern.
-    Gibt True zurück, wenn es geklappt hat.
+    1. Verbindet sich mit der Datenbank.
+    2. Löscht ALLE alten Einträge (Reset).
+    3. Speichert die aktuellen PDFs neu.
     """
-    print("🔄 Starte Ingestion via API...")
-    docs = load_documents()
-    if not docs:
-        print("⚠️ Keine Dokumente gefunden.")
-        return False
+    print("🔄 Starte Datenbank-Update...")
 
-    chunks = split_text(docs)
-    save_to_chroma(chunks)
-    return True
+    # 1. Verbindung zur Datenbank herstellen
+    db = Chroma(
+        persist_directory=DB_PATH,
+        embedding_function=get_embedding_function()
+    )
 
-def main():
-    print("🚀 Starte Ingestion-Pipeline...")
+    # 2. Alte Daten löschen
+    existing_ids = db.get()["ids"]
+
+    if existing_ids:
+        print(f"🧹 Lösche {len(existing_ids)} alte Einträge aus dem Gedächtnis...")
+        # Wir löschen die Einträge, aber behalten die Ordner-Struktur
+        # Das verhindert den Windows-Fehler!
+        db.delete(ids=existing_ids)
+    else:
+        print("🧹 Datenbank war bereits leer.")
+
+    # 3. Neue Daten Laden
     docs = load_documents()
+
     if docs:
         chunks = split_text(docs)
-        save_to_chroma(chunks)
+        print(f"💾 Speichere {len(chunks)} neue Wissens-Häppchen...")
+        db.add_documents(chunks)
+        print("✅ Update fertig!")
+        return True
     else:
-        print("❌ Keine PDFs im 'data' Ordner gefunden!")
+        print("⚠️ Keine PDFs mehr da. Datenbank ist jetzt leer.")
+        return True
 
+# Damit man es auch manuell testen kann
 if __name__ == "__main__":
-    main()
+    ingest_docs()

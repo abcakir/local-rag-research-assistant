@@ -1,6 +1,9 @@
-from fastapi import FastAPI, HTTPException
+import os
+import shutil
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
-from src.rag import query_rag  # Wir importieren deine RAG-Funktion
+from src.rag import query_rag
+from src.ingest import ingest_docs
 
 # 1. Die App initialisieren
 app = FastAPI(
@@ -9,12 +12,39 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 2. Datenmodell definieren (Der "Bestellzettel")
-# Pydantic prüft, ob der Nutzer wirklich Text schickt und keine Zahlen oder Quatsch.
+# 2. Datenmodell definieren
 class QueryRequest(BaseModel):
     query: str
 
-# 3. Der Endpunkt (Die "Tür" zur Küche)
+@app.post("/upload")
+def upload_document(file: UploadFile = File(...)):
+    """
+    Nimmt eine PDF-Datei entgegen, speichert sie und startet das Lernen.
+    """
+    # 1. Prüfen, ob es ein PDF ist
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Nur PDF-Dateien erlaubt!")
+
+    # 2. Datei speichern
+    # Wir stellen sicher, dass der data-Ordner existiert
+    os.makedirs("./data", exist_ok=True)
+
+    save_path = f"./data/{file.filename}"
+
+    with open(save_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # 3. Datenbank neu aufbauen (Ingestion triggern)
+    print(f"📂 Datei gespeichert: {file.filename}. Starte Ingestion...")
+    success = ingest_docs()
+
+    if success:
+        return {"message": f"Datei '{file.filename}' erfolgreich verarbeitet!", "filename": file.filename}
+    else:
+        raise HTTPException(status_code=500, detail="Fehler bei der Verarbeitung der Datei.")
+
+
+# 3. Der Chat Endpunkt
 @app.post("/chat")
 def chat_endpoint(request: QueryRequest):
     """
@@ -28,7 +58,6 @@ def chat_endpoint(request: QueryRequest):
 
     print(f"📩 API Anfrage erhalten: {user_question}")
 
-    # Hier rufen wir dein "Gehirn" auf (rag.py)
     response = query_rag(user_question)
 
     return {
@@ -36,7 +65,7 @@ def chat_endpoint(request: QueryRequest):
         "answer": response
     }
 
-# 4. Ein einfacher Test-Endpunkt (Health Check)
+# 4. Health Check
 @app.get("/")
 def health_check():
     return {"status": "running", "message": "Der Server ist bereit! 🚀"}

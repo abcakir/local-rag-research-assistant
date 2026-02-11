@@ -1,42 +1,73 @@
 import streamlit as st
 import requests
 
-# Das ist die Adresse, wo dein FastAPI-Server läuft
-# WICHTIG: Der Port (8000) muss mit dem von uvicorn übereinstimmen!
-API_URL = "http://127.0.0.1:8000/chat"
+API_URL = "http://127.0.0.1:8000"
 
-# --- Seite konfigurieren ---
-st.set_page_config(page_title="RAG Assistant", page_icon="🤖")
+st.set_page_config(page_title="RAG Assistant Pro", page_icon="🧠", layout="wide")
 
-st.title("🧠 Mein AI Research Assistant")
-st.write("Stelle eine Frage an deine hochgeladenen PDFs.")
+st.title("🧠 Mein AI Research Assistant Pro")
 
-# --- Eingabebereich ---
-# Ein Textfeld für den Nutzer
-user_input = st.text_area("Deine Frage:", placeholder="Was ist ein digitales Zertifikat?")
+# --- SIDEBAR: DOKUMENTEN-MANAGEMENT ---
+with st.sidebar:
+    st.header("📂 Dokumente")
+    uploaded_file = st.file_uploader("PDF hochladen", type=["pdf"])
 
-# --- Logik ---
+    if uploaded_file is not None:
+        if st.button("Datei verarbeiten & Lernen 🧠"):
+            with st.spinner("Lade hoch und lerne..."):
+                files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
+                try:
+                    response = requests.post(f"{API_URL}/upload", files=files)
+                    if response.status_code == 200:
+                        st.success("Erfolgreich gelernt!")
+                    else:
+                        st.error(f"Fehler: {response.text}")
+                except Exception as e:
+                    st.error(f"Verbindungsfehler: {e}")
+
+    st.markdown("---")
+
+    # Der "Zusammenfassen" Button
+    if st.button("📑 Dokument zusammenfassen"):
+        with st.spinner("Erstelle Zusammenfassung..."):
+            try:
+                # Wir schicken einfach einen speziellen Prompt an die Chat-API
+                payload = {"query": "Fasse den Inhalt der hochgeladenen Dokumente kurz und strukturiert zusammen."}
+                response = requests.post(f"{API_URL}/chat", json=payload)
+
+                if response.status_code == 200:
+                    summary = response.json().get("answer")
+                    st.info("Zusammenfassung:")
+                    st.markdown(summary)
+                else:
+                    st.error("Konnte nicht zusammenfassen.")
+            except Exception as e:
+                st.error(f"Fehler: {e}")
+
+# --- HAUPTBEREICH: CHAT ---
+st.subheader("💬 Chat")
+user_input = st.text_area("Deine Frage an das Dokument:", height=100)
+
 if st.button("Frage senden 🚀"):
     if not user_input:
         st.warning("Bitte gib eine Frage ein!")
     else:
-        # Ladebalken anzeigen, während die KI denkt
-        with st.spinner("Die KI durchsucht die Dokumente..."):
+        with st.spinner("Die KI denkt nach..."):
             try:
-                # 1. Anfrage an die API senden
-                response = requests.post(API_URL, json={"query": user_input})
+                response = requests.post(f"{API_URL}/chat", json={"query": user_input})
 
-                # 2. Prüfen, ob alles geklappt hat (Status 200 = OK)
                 if response.status_code == 200:
-                    data = response.json()
-                    answer = data.get("answer", "Keine Antwort erhalten.")
+                    answer = response.json().get("answer")
 
-                    st.success("Antwort gefunden!")
+                    # Intelligente Prüfung auf "Nichts gefunden"
+                    not_found_phrases = ["keine informationen", "nicht im kontext", "weiß ich nicht"]
+                    if any(phrase in answer.lower() for phrase in not_found_phrases):
+                        st.warning("⚠️ Keine passenden Infos im Dokument gefunden.")
+                    else:
+                        st.success("✅ Antwort gefunden!")
+
                     st.markdown(answer)
                 else:
-                    st.error(f"Fehler vom Server: {response.status_code}")
-                    st.text(response.text)
-
-            except requests.exceptions.ConnectionError:
-                st.error("Verbindung fehlgeschlagen! ❌")
-                st.info("Tipp: Läuft dein Backend-Server? (uvicorn src.app:app)")
+                    st.error(f"Server Fehler: {response.status_code}")
+            except Exception as e:
+                st.error(f"Verbindung fehlgeschlagen: {e}")

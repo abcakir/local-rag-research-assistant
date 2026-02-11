@@ -16,7 +16,7 @@ import shutil
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
-from rag import get_embedding_function, DATA_PATH, DB_PATH
+from src.rag import get_embedding_function, DATA_PATH, DB_PATH
 
 def load_documents():
     """Liest alle PDFs aus dem data-Ordner."""
@@ -57,6 +57,21 @@ def save_to_chroma(chunks):
         persist_directory=DB_PATH
     )
     print(f"✅ Datenbank neu erstellt in {DB_PATH} mit {len(chunks)} Einträgen.")
+
+def ingest_docs():
+    """
+    Führt die komplette Pipeline aus: Laden -> Splitten -> Speichern.
+    Gibt True zurück, wenn es geklappt hat.
+    """
+    print("🔄 Starte Ingestion via API...")
+    docs = load_documents()
+    if not docs:
+        print("⚠️ Keine Dokumente gefunden.")
+        return False
+
+    chunks = split_text(docs)
+    save_to_chroma(chunks)
+    return True
 
 def main():
     print("🚀 Starte Ingestion-Pipeline...")

@@ -12,9 +12,6 @@ Aufgaben:
 
 Tech-Stack: Streamlit, Requests
 """
-import os
-import streamlit as st
-# ... (Rest deines Codes)
 
 import os
 import streamlit as st

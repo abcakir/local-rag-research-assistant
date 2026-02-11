@@ -64,8 +64,8 @@ def query_rag(query_text):
     prompt = prompt_template.format(context=context_text, question=query_text)
 
     # 5. An Ollama senden
-    print("🤖 Generiere Antwort mit Ollama...")
-    model = ChatOllama(model=OLLAMA_MODEL)
+    print("🤖 Generiere Antwort mit Mistral...")
+    model = ChatOllama(model="mistral")
     response_text = model.invoke(prompt)
 
     # 6. Ergebnis formatieren

@@ -1,111 +1,148 @@
 import streamlit as st
 import requests
+import time
 
 API_URL = "http://127.0.0.1:8000"
 
-st.set_page_config(page_title="RAG Assistant Pro", page_icon="🧠", layout="wide")
-st.title("🧠 Mein AI Research Assistant Pro")
+# --- CONFIG & CSS ---
+st.set_page_config(page_title="Document Intelligence", page_icon="📄", layout="wide")
 
-# --- SIDEBAR: DATEI MANAGER ---
+st.markdown("""
+    <style>
+        /* Header Bereich verkleinern */
+        .block-container {
+            padding-top: 2rem;
+        }
+        /* Buttons professioneller gestalten */
+        .stButton > button {
+            width: 100%;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        /* Chat Input Styling */
+        .stChatInput {
+            border-radius: 10px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- HEADER ---
+st.title("Document Intelligence Hub")
+st.markdown("Interne Wissensdatenbank & Analyse")
+
+# --- SESSION STATE ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# --- SIDEBAR: MANAGEMENT ---
 with st.sidebar:
-    st.header("📂 Dokumente")
+    st.header("Dateiverwaltung")
 
-    # 1. Upload Bereich
-    uploaded_file = st.file_uploader("Neues PDF hinzufügen", type=["pdf"])
-    if uploaded_file is not None:
-        if st.button("Hinzufügen & Lernen 🧠"):
-            with st.spinner("Lade hoch..."):
-                files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
-                try:
-                    res = requests.post(f"{API_URL}/upload", files=files)
-                    if res.status_code == 200:
-                        st.success("Gespeichert!")
-                        st.rerun() # Seite neu laden, um Liste zu aktualisieren
-                    else:
-                        st.error(f"Fehler: {res.text}")
-                except Exception as e:
-                    st.error(f"Verbindungsfehler: {e}")
+    # 1. UPLOAD
+    with st.container():
+        st.subheader("Upload")
+        uploaded_file = st.file_uploader("PDF auswählen", type=["pdf"], label_visibility="collapsed")
+
+        if uploaded_file is not None:
+            if st.button("Verarbeiten", type="primary", use_container_width=True):
+                with st.spinner("Dokument wird analysiert..."):
+                    files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
+                    try:
+                        response = requests.post(f"{API_URL}/upload", files=files)
+                        if response.status_code == 200:
+                            st.toast(f"✅ '{uploaded_file.name}' erfolgreich integriert!", icon="✅")
+                            time.sleep(1) # Kurz warten für UX
+                            st.rerun()
+                        else:
+                            st.error(f"Fehler: {response.text}")
+                    except Exception as e:
+                        st.error(f"Verbindungsfehler: {e}")
 
     st.markdown("---")
-    st.subheader("Gespeicherte Dateien:")
 
-    # 2. Liste anzeigen & Löschen
+    # 2. DATEILISTE
+    st.subheader("Indexierte Dokumente")
+
     try:
-        # Liste vom Backend holen
         res = requests.get(f"{API_URL}/files")
         if res.status_code == 200:
             files = res.json().get("files", [])
 
             if files:
                 for f in files:
-                    # Layout: Text links, Mülleimer rechts
-                    col1, col2 = st.columns([0.8, 0.2])
+                    col1, col2 = st.columns([0.7, 0.3])
 
                     with col1:
-                        st.text(f"📄 {f}")
+                        st.text(f"{f[:20]}..." if len(f) > 20 else f, help=f)
 
                     with col2:
-                        # WICHTIG: Unique Key für jeden Button!
-                        if st.button("🗑️", key=f"del_{f}", help="Löschen"):
-                            with st.spinner("Lösche..."):
+                        if st.button("X", key=f"del_{f}", help="Dokument dauerhaft löschen"):
+                            try:
                                 del_res = requests.delete(f"{API_URL}/files/{f}")
                                 if del_res.status_code == 200:
-                                    st.success("Weg!")
-                                    st.rerun() # Seite neu laden
+                                    st.toast(f"🗑️ '{f}' entfernt.", icon="🗑️")
+                                    time.sleep(0.7)
+                                    st.rerun()
                                 else:
                                     st.error("Fehler")
+                            except Exception as e:
+                                st.error(f"Fehler: {e}")
             else:
-                st.info("Keine Dateien vorhanden.")
+                st.info("Keine Dokumente im Index.")
+
         else:
-            st.warning("Konnte Dateiliste nicht laden.")
+            st.warning("Server nicht erreichbar.")
+
     except Exception as e:
-        st.error(f"API nicht erreichbar. Läuft uvicorn? ({e})")
+        st.error(f"Verbindungsfehler: {e}")
+
+    st.markdown("---")
+
+    # Reset Button ganz unten
+    if st.button("Chatverlauf leeren", type="secondary"):
+        st.session_state.messages = []
+        st.rerun()
 
 # --- HAUPTBEREICH: CHAT ---
-st.subheader("💬 Chat")
-user_input = st.text_area("Deine Frage an die Dokumente:", height=100)
 
-col_ask, col_sum = st.columns([0.2, 0.8])
+# 1. Chatverlauf anzeigen
+for message in st.session_state.messages:
+    role = message["role"]
+    avatar = "👤" if role == "user" else "🤖"
 
-with col_ask:
-    send_button = st.button("Frage senden 🚀")
+    with st.chat_message(role, avatar=avatar):
+        st.markdown(message["content"])
 
-with col_sum:
-    sum_button = st.button("📑 Alles zusammenfassen")
+# 2. Input Feld
+if prompt := st.chat_input("Stellen Sie eine Frage an die Dokumente..."):
 
-# Logik für Zusammenfassen
-if sum_button:
-    with st.spinner("Erstelle Zusammenfassung..."):
-        try:
-            payload = {"query": "Fasse den Inhalt aller hochgeladenen Dokumente kurz und strukturiert zusammen."}
-            res = requests.post(f"{API_URL}/chat", json=payload)
-            if res.status_code == 200:
-                st.info("Zusammenfassung:")
-                st.markdown(res.json().get("answer"))
-            else:
-                st.error("Fehler beim Zusammenfassen.")
-        except Exception as e:
-            st.error(f"Fehler: {e}")
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user", avatar="👤"):
+        st.markdown(prompt)
 
-# Logik für Chat
-if send_button:
-    if not user_input:
-        st.warning("Bitte gib eine Frage ein!")
-    else:
-        with st.spinner("Die KI denkt nach..."):
+    # Bot antwortet
+    with st.chat_message("assistant", avatar="🤖"):
+        message_placeholder = st.empty()
+
+        with st.spinner("Analysiere Daten..."):
             try:
-                response = requests.post(f"{API_URL}/chat", json={"query": user_input})
+                payload = {
+                    "query": prompt,
+                    "history": st.session_state.messages[:-1]
+                }
+
+                response = requests.post(f"{API_URL}/chat", json=payload)
+
                 if response.status_code == 200:
                     answer = response.json().get("answer")
 
                     not_found_phrases = ["keine informationen", "nicht im kontext", "weiß ich nicht"]
                     if any(p in answer.lower() for p in not_found_phrases):
-                        st.warning("⚠️ Keine Infos gefunden.")
-                    else:
-                        st.success("✅ Antwort gefunden!")
+                        st.warning("Keine passenden Informationen in den Dokumenten gefunden.")
 
-                    st.markdown(answer)
+                    message_placeholder.markdown(answer)
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
                 else:
-                    st.error(f"Server Fehler: {response.status_code}")
+                    message_placeholder.error(f"Server Fehler: {response.status_code}")
             except Exception as e:
-                st.error(f"Verbindung fehlgeschlagen: {e}")
+                message_placeholder.error(f"Verbindung fehlgeschlagen: {e}")

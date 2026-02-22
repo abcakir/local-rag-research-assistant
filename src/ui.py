@@ -1,164 +1,91 @@
 """
-ui.py - Das Frontend (Benutzeroberfläche)
-
-Diese Datei erzeugt die grafische Oberfläche für den Endnutzer im Browser.
-Sie enthält keine Geschäftslogik, sondern ruft nur die API (app.py) auf.
-
-Aufgaben:
-1. Darstellung des Chat-Interfaces (Chatbot-Look).
-2. Verwaltung von Datei-Uploads und Löschvorgängen via Sidebar.
-3. Session-Management (Speichern des Chatverlaufs).
-4. Visualisierung von Ladezeiten (Spinner) und Fehlermeldungen.
-
-Tech-Stack: Streamlit, Requests
+🖥️ ui.py - Das Frontend (Minimal Version)
+-----------------------------------------
+Eine absolut reduzierte Benutzeroberfläche.
+Fokus: Datei hochladen & Chatten. Keine Ablenkungen.
 """
 
-import os
 import streamlit as st
 import requests
-import time
+import os
 
+# Konfiguration
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+st.set_page_config(page_title="RAG Chat", page_icon="🤖")
+st.title("RAG Chat")
 
-# --- CONFIG & CSS ---
-st.set_page_config(page_title="Document Intelligence", page_icon="📄", layout="wide")
-
-st.markdown("""
-    <style>
-        /* Header Bereich verkleinern */
-        .block-container {
-            padding-top: 2rem;
-        }
-        /* Buttons professioneller gestalten */
-        .stButton > button {
-            width: 100%;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-        /* Chat Input Styling */
-        .stChatInput {
-            border-radius: 10px;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- HEADER ---
-st.title("Document Intelligence Hub")
-st.markdown("Interne Wissensdatenbank & Analyse")
-
-# --- SESSION STATE ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# --- SIDEBAR: MANAGEMENT ---
+# --- SIDEBAR: DATEIEN ---
 with st.sidebar:
-    st.header("Dateiverwaltung")
+    st.header("Dokumente")
 
-    # 1. UPLOAD
-    with st.container():
-        st.subheader("Upload")
-        uploaded_file = st.file_uploader("PDF auswählen", type=["pdf"], label_visibility="collapsed")
+    # 1. Upload
+    uploaded_file = st.file_uploader("PDF hochladen", type="pdf")
+    if uploaded_file and st.button("Hochladen"):
+        with st.spinner("Lade..."):
+            files = {"file": uploaded_file}
+            res = requests.post(f"{API_URL}/upload", files=files)
+            if res.status_code == 200:
+                st.success("Gespeichert!")
+                st.rerun()
+            else:
+                st.error("Fehler beim Upload.")
 
-        if uploaded_file is not None:
-            if st.button("Verarbeiten", type="primary", use_container_width=True):
-                with st.spinner("Dokument wird analysiert..."):
-                    files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
-                    try:
-                        response = requests.post(f"{API_URL}/upload", files=files)
-                        if response.status_code == 200:
-                            st.toast(f"✅ '{uploaded_file.name}' erfolgreich integriert!", icon="✅")
-                            time.sleep(1) # Kurz warten für UX
-                            st.rerun()
-                        else:
-                            st.error(f"Fehler: {response.text}")
-                    except Exception as e:
-                        st.error(f"Verbindungsfehler: {e}")
+    st.divider()
 
-    st.markdown("---")
-
-    # 2. DATEILISTE
-    st.subheader("Indexierte Dokumente")
-
+    # 2. Dateiliste
+    st.subheader("Im Index:")
     try:
         res = requests.get(f"{API_URL}/files")
-        if res.status_code == 200:
-            files = res.json().get("files", [])
+        files = res.json().get("files", [])
+        for f in files:
+            # Name + Löschen-Button
+            col1, col2 = st.columns([0.8, 0.2])
+            col1.caption(f)
+            if col2.button("X", key=f):
+                requests.delete(f"{API_URL}/files/{f}")
+                st.rerun()
 
-            if files:
-                for f in files:
-                    col1, col2 = st.columns([0.7, 0.3])
+        if not files:
+            st.caption("Keine Dateien.")
+    except:
+        st.error("Backend offline.")
 
-                    with col1:
-                        st.text(f"{f[:20]}..." if len(f) > 20 else f, help=f)
-
-                    with col2:
-                        if st.button("X", key=f"del_{f}", help="Dokument dauerhaft löschen"):
-                            try:
-                                del_res = requests.delete(f"{API_URL}/files/{f}")
-                                if del_res.status_code == 200:
-                                    st.toast(f"🗑️ '{f}' entfernt.", icon="🗑️")
-                                    time.sleep(0.7)
-                                    st.rerun()
-                                else:
-                                    st.error("Fehler")
-                            except Exception as e:
-                                st.error(f"Fehler: {e}")
-            else:
-                st.info("Keine Dokumente im Index.")
-
-        else:
-            st.warning("Server nicht erreichbar.")
-
-    except Exception as e:
-        st.error(f"Verbindungsfehler: {e}")
-
-    st.markdown("---")
-
-    # Reset Button ganz unten
-    if st.button("Chatverlauf leeren", type="secondary"):
+    # 3. Reset
+    if st.button("Chat leeren", type="primary"):
         st.session_state.messages = []
         st.rerun()
 
-# --- HAUPTBEREICH: CHAT ---
+# --- CHAT BEREICH ---
 
-# 1. Chatverlauf anzeigen
-for message in st.session_state.messages:
-    role = message["role"]
-    avatar = "👤" if role == "user" else "🤖"
+# Session State initialisieren
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    with st.chat_message(role, avatar=avatar):
-        st.markdown(message["content"])
+# 1. Verlauf anzeigen
+for msg in st.session_state.messages:
+    st.chat_message(msg["role"]).write(msg["content"])
 
-# 2. Input Feld
-if prompt := st.chat_input("Stellen Sie eine Frage an die Dokumente..."):
-
+# 2. Eingabe & Antwort
+if prompt := st.chat_input("Frage stellen..."):
+    # User-Nachricht sofort anzeigen
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(prompt)
+    st.chat_message("user").write(prompt)
 
-    # Bot antwortet
-    with st.chat_message("assistant", avatar="🤖"):
-        message_placeholder = st.empty()
+    # Anfrage an API
+    try:
+        payload = {"query": prompt, "history": st.session_state.messages[:-1]}
 
-        with st.spinner("Analysiere Daten..."):
-            try:
-                payload = {
-                    "query": prompt,
-                    "history": st.session_state.messages[:-1]
-                }
+        with st.spinner("Denke nach..."):
+            response = requests.post(f"{API_URL}/chat", json=payload)
 
-                response = requests.post(f"{API_URL}/chat", json=payload)
+            if response.status_code == 200:
+                answer = response.json().get("answer")
 
-                if response.status_code == 200:
-                    answer = response.json().get("answer")
+                # Antwort anzeigen & speichern
+                st.session_state.messages.append({"role": "assistant", "content": answer})
+                st.chat_message("assistant").write(answer)
+            else:
+                st.error(f"Server-Fehler: {response.status_code}")
 
-                    not_found_phrases = ["keine informationen", "nicht im kontext", "weiß ich nicht"]
-                    if any(p in answer.lower() for p in not_found_phrases):
-                        st.warning("Keine passenden Informationen in den Dokumenten gefunden.")
-
-                    message_placeholder.markdown(answer)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
-                else:
-                    message_placeholder.error(f"Server Fehler: {response.status_code}")
-            except Exception as e:
-                message_placeholder.error(f"Verbindung fehlgeschlagen: {e}")
+    except Exception as e:
+        st.error(f"Verbindungsfehler: {e}")

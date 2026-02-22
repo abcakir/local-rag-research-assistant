@@ -29,7 +29,8 @@ Deine Aufgabe ist es, die Frage ausschließlich basierend auf dem folgenden Kont
 REGELN:
 1. Nutze NUR die Informationen aus dem Abschnitt "KONTEXT".
 2. Nutze NIEMALS dein internes Wissen (keine Geografie, keine Geschichte, keine Fakten, die nicht im Text stehen).
-3. Wenn die Antwort nicht im Kontext steht, antworte exakt mit: "Diese Information ist im Dokument nicht enthalten."
+3. Antworte sehr detailliert!
+4. Wenn die Antwort nicht im Kontext steht, antworte exakt mit: "Diese Information ist im Dokument nicht enthalten."
 
 Chatverlauf:
 {history}
@@ -53,7 +54,7 @@ def query_rag(query_text: str, history: list = []):
     embedding_function = get_embedding_function()
     db = Chroma(persist_directory=DB_PATH, embedding_function=embedding_function)
 
-    # 2. Suchen (Wichtig: results speichern wir hier für später!)
+    # 2. Suchen
     print(f"🔍 Suche nach: '{query_text}'")
     results = db.similarity_search_with_score(query_text, k=5)
 
@@ -63,7 +64,6 @@ def query_rag(query_text: str, history: list = []):
     # 4. History formatieren
     formatted_history = ""
     for msg in history:
-        # Falls deine History-Objekte anders aussehen, hier anpassen
         role = "User" if msg.get('role') == 'user' else "Assistant"
         content = msg.get('content', '')
         formatted_history += f"{role}: {content}\n"
